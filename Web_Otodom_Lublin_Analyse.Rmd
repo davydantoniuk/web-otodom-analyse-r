@@ -1,0 +1,448 @@
+---
+title: "Otodom Lublin analyse"
+author: "Antoniuk Davyd"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+```{r message=FALSE,warning=FALSE}
+library(readxl)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(ggcorrplot)
+library(plotly)
+library(grid)
+library(ggrepel)
+library(forcats)
+library(scales)
+library(lessR)
+library(shiny)
+library(factoextra)
+library(gridExtra)
+```
+<h3><strong>Project goal</strong></h3>
+
+
+The aim of the project was to conduct a comprehensive analysis of the real estate market in Lublin, using data obtained from the OtoDom real estate portal. The main goal was to collect and systematize information from real estate listings in the region.
+
+The main tasks included collecting data on different types of properties, their location, area, prices and other parameters. In addition, for a broader context, data from other cities was also taken to conduct a comparative analysis of real estate markets and identify features that make Lublin unique or similar to other regions.
+
+<h3><strong>Data base</strong></h3>
+
+As part of the project, I collected and analyzed data on house sale advertisements in Lublin and other Polish cities, using the R programming language. Before proceeding with the analysis, I cleaned the data, removing NA values and outliers. The first database contained ads from Lublin only and consisted of the following columns: city,name,price,price_m2,rooms,area,region,full_address,year_construction,type_construction,material_building
+
+The second database contained ads from different cities: Lublin, Warsaw, Wroclaw, Katowice, Gdansk, Bialystok and consisted of the following columns: city,name,price,price_m2,rooms,area
+```{r message=FALSE,warning=FALSE}
+#No outlier observations
+dane_lublin <- read_excel("data_otodom_lublin.xlsx")
+dane_wkbd <- read_excel("data_otodom_wkbd.xlsx")
+dane_all <- rbind(dane_lublin,dane_wkbd)
+```
+
+```{r message=FALSE,warning=FALSE}
+#Observation outliers
+dane_lublin_nc <- read_excel("data_otodom_lublin_nc.xlsx")
+dane_wkbd_nc <- read_excel("data_otodom_wkbd_nc.xlsx")
+dane_all_nc <- rbind(dane_lublin_nc,dane_wkbd_nc)
+```
+
+
+<h4>Comparison of the city of Lublin with other cities</h4>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+plot2 <- dane_all %>%
+  filter(!(city == "Warszawa" & price_m2 >= 25000))
+
+ggplot(plot2, aes(x = price_m2, fill = city)) +
+  geom_histogram(position = "identity", alpha = 0.7, bins = 30) +
+  facet_wrap(~city, scales = "free") +
+  labs(title = "Histogram of prices per square meter in different cities",
+       x = "Price per square meter",
+       y = "Frequency") +
+  scale_fill_discrete(name = "City")
+```
+
+The chart shows the distribution of prices per square meter of real estate in various Polish cities. It shows that the distribution of prices varies considerably between cities, with Warsaw having the highest prices and a wide range, while other cities, such as Bialystok and Lublin, have lower and more concentrated price distributions.
+
+*Warsaw* is the most expensive and most diversified real estate market in Poland, which may be due to its status as the capital, large population, high standard of living and attractiveness to investors.
+
+*Bialystok, Katowice and Lublin* are the cheapest and least diverse real estate markets in Poland, which may be due to their smaller populations, lower living standards and lower attractiveness to investors.
+
+*Gdansk, Wrocław and Kraków* have the average prices and distributions of real estate in Poland, which may be due to their geographic, historical and cultural location, as well as their tourism and economic potential.
+<br>
+<br>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+avg_price_by_city <- dane_all %>%
+  group_by(city) %>%
+  summarize(mean_price = mean(price_m2))
+
+plot1 <- dane_all %>%
+  left_join(avg_price_by_city, by = "city") %>%
+  mutate(city_factor = factor(city, levels = unique(city[order(mean_price)])))
+
+ggplot(plot1, aes(x = city_factor, y = price_m2, fill = city_factor)) +
+  geom_boxplot() +
+  labs(title = "Distribution of prices per square meter",
+       x = "City",
+       y = "Price per square meter") +
+  scale_fill_discrete(name = "City")
+
+```
+<br>
+The chart shows the median, interquartile range and outliers of prices per square meter in six cities: Katowice, Bialystok, Lublin, Wroclaw, Gdansk and Warsaw.
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+ggplot(dane_all_nc, aes(x = city, y = rooms, fill = city)) +
+  geom_bar(stat = "summary", fun = "mean", position = "dodge") +
+  stat_summary(fun = "mean", geom = "text", position = position_dodge(width = 0.9),
+               aes(label = round(..y.., digits = 2)),
+               vjust = -0.5) +
+  labs(title = "Comparison of average number of rooms in cities",
+       x = "City", y = "Average number of rooms", fill = "City") +
+  theme_minimal() +
+  scale_y_continuous(expand = expansion(add = c(0, 0.5)))
+```
+
+The differences between cities are small. The average number of rooms in all cities ranges from *2.31 to 2.74*, which means that there are no big differences in the size of apartments.
+<br>
+<br>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+average_area <- aggregate(area ~ city, data = dane_all_nc, FUN = mean)
+average_area$percentage <- (average_area$area / sum(average_area$area)) * 100
+ggplot(average_area, aes(x = "", y = area, fill = city)) +
+  geom_bar(stat = "identity", width = 1, color = "white") +
+  geom_text(aes(label = paste(round(percentage, 2), "%\n", round(area, 2), "m²")),
+            position = position_stack(vjust = 0.5),
+            color = "black", size = 3, alpha = 0.6) +
+  coord_polar("y", start = 0) +
+  labs(title = "Comparison of average area between cities",
+       subtitle = "Percentage of total area + average area",
+       x = NULL, y = NULL,
+       fill = "City") +
+  theme_minimal() +
+  theme(axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        plot.subtitle = element_text(size = 9))
+```
+
+*The differences between cities are moderate.* The average area in all cities ranges from *53.63 m²* to *66.78 m²*, which means that there are no extreme differences in housing size.
+<br>
+<br>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+#Correlation matrix
+plot3 <- dane_lublin %>% 
+  mutate(rok_budowy = ifelse(rok_budowy == "brak informacji", NA, as.numeric(rok_budowy)))
+dane_numeryczne <- plot3 %>%
+  mutate(rok_budowy = as.numeric(rok_budowy)) %>% 
+  filter(rok_budowy != "brak informacji") %>% 
+  select(price, price_m2, rooms, area, rok_budowy)
+
+colnames(dane_numeryczne) <- c("Price", "Price per m²", "Number of Rooms", "Area", "Year of Construction")
+macierz_korelacji <- round(cor(dane_numeryczne), 2)
+p_mat <- cor_pmat(macierz_korelacji)
+ggcorrplot(macierz_korelacji, lab = TRUE, p.mat = p_mat, title = "Correlation Matrix")
+
+diag(macierz_korelacji) <- 0
+max_corr <- max(macierz_korelacji[upper.tri(macierz_korelacji)], na.rm = TRUE)
+max_corr_vars <- which(macierz_korelacji == max_corr, arr.ind = TRUE)
+max_corr_vars_names <- colnames(macierz_korelacji)[max_corr_vars]
+
+min_corr <- min(macierz_korelacji[upper.tri(macierz_korelacji)], na.rm = TRUE)
+min_corr_vars <- which(macierz_korelacji == min_corr, arr.ind = TRUE)
+min_corr_vars_names <- colnames(macierz_korelacji)[min_corr_vars]
+
+cat("Highest correlation coefficient:", max_corr, "\n")
+cat("Between variables:", max_corr_vars_names[1], "and", max_corr_vars_names[2], "\n\n")
+
+cat("Lowest correlation coefficient:", min_corr, "\n")
+cat("Between variables:", min_corr_vars_names[1], "and", min_corr_vars_names[2], "\n")
+```
+
+
+The highest correlation coefficient *(0.74)* between the variables *"Area" (area)* and *"Price" (price)* indicates a strong positive relationship between property size and price. This means that the larger the area of a property, the higher the price usually is.
+
+
+In contrast, the lowest correlation coefficient *(-0.51)* between the variables *"Area "* and *"Price per m²" (price per square meter)* indicates a moderate negative relationship between property size and price per square meter. This means that although larger properties tend to be more expensive, the price per square meter decreases as the area increases.
+<br>
+<br>
+<br>
+<br>
+<h4>Analiza w mieście Lublin</h4>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+ggplot(dane_lublin, aes(x = price)) +
+  geom_histogram(binwidth = 50000, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "Histogram of house price distribution",
+       subtitle = "Lublin",
+       x = "Price",
+       y = "Number of listings") +
+  scale_x_continuous(breaks = seq(min(dane_lublin$price), max(dane_lublin$price), by = 80000))
+```
+
+
+It can be read from it that a significant proportion of homes are priced between *385,050* and *548,500*, with the highest incidence in this range. One can conclude from this that this is the typical price range for houses in Lublin, and that houses with lower or higher prices are rarer or more exclusive.
+<br>
+<br>
+<br>
+<br>
+```{r}
+plot3 <- dane_lublin %>% 
+  filter(region != "Węglin Północny" & region != "Hajdów-Zadębie")
+
+ggplot(plot3, aes(x = reorder(region, price_m2), y = price_m2, fill = region)) +
+  geom_boxplot() +
+  labs(title = "Price per square meter in each region", x = "Region", y = "Price per square meter") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "none")
+```
+
+
+The chart shows the difference in price per square meter in different regions. It can be read from it that Wieniawa has the highest price per square meter, and Zabierzow has the lowest. From this one can conclude that Wieniawa is the most attractive and expensive place to live, while Zabierzow is the cheapest and least popular.
+<br>
+<br>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+plot4 <- dane_lublin_nc %>%
+  filter(rooms <= 5) %>%
+  group_by(rooms) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+ggplot(plot4, aes(x = rooms, y = count, fill = as.factor(rooms))) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = paste0(count, " (", sprintf("%.1f", percentage), "%)")), vjust = -0.5, size = 3) +
+  labs(title = "Distribution of number of rooms in houses in Lublin",
+       x = "Number of rooms",
+       y = "Number of listings")
+```
+
+
+The chart shows the distribution of the number of rooms in houses in Lublin. The largest number of ads are for houses with three rooms *(41.4%)*, and the smallest number of ads are for houses with five rooms *(1.6%)*. It can be concluded from this that three rooms is the most popular and optimal size of a house in Lublin, while houses with more or fewer rooms are less common or less desirable.
+<br>
+<br>
+<br>
+<br>
+```{r}
+ggplot(data = dane_lublin, aes(x = price_m2, y = price, color = rooms, size = price_m2)) +
+  geom_point() +
+  labs(title = "Relationship between price and house area and number of rooms",
+       x = "Price per square meter",
+       y = "Price",
+       size = "Price per square meter") +
+  scale_size_continuous(range = c(1, 3)) +
+  coord_cartesian(xlim = c(5000, 17000)) +
+  theme_minimal()
+```
+
+
+The graph shows the relationship of price to the area of the house and the number of rooms.It can be deduced from the data that the price generally increases as the area and number of rooms increase, although there is a large variation in prices.It can also be seen that houses with more rooms have a lower price per square meter.Potentially, this could indicate the greater availability of larger properties or the specific preferences of the local community, where houses with more rooms are more attractive to potential buyers.
+<br>
+<br>
+<br>
+<br>
+```{r}
+plot8 <- dane_lublin %>% 
+  filter(material_budynku != "brak informacji")
+
+ggplot(data = plot8, aes(x = material_budynku, y = price_m2, fill = material_budynku)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  geom_text(stat = "summary", fun = function(x) mean(x), vjust = -0.5, aes(label = sprintf("%.2f", ..y..)), color = "black", size = 3) +
+  labs(title = "Average price per square meter depending on building material",
+       x = "Building material",
+       y = "Price per square meter") +
+  theme(axis.text.x = element_text(size = 8, angle = 45, hjust = 1),
+        axis.text.y = element_text(size = 8))
+```
+
+
+*Big slab and reinforced concrete are the most expensive.* Buildings made of big slab and reinforced concrete have the highest average price per square meter.
+
+
+*Timber is the cheapest.* Buildings made of wood have the lowest average price per square meter.
+
+
+*Concrete and cellular concrete* are similar. Buildings made of concrete and cellular concrete have a similar average price per square meter.
+
+
+*The differences between materials are significant.*The average price per square meter depending on the material of the building ranges from 5441.86 to 10087.86 zlotys, which means that the material has a big impact on the cost of construction.
+<br>
+<br>
+<br>
+<br>
+```{r}
+plot5 <- dane_lublin %>% 
+  filter(rok_budowy != "brak informacji")
+
+intervals <- seq(1860, 2025, by = 30)
+intervals[length(intervals) + 1] <- 2025 
+
+plot5 <- plot5 %>%
+  mutate(rok_interval = cut(as.numeric(rok_budowy), breaks = intervals, labels = FALSE))
+
+integral_data <- plot5 %>%
+  group_by(rok_interval) %>%
+  summarise(interval_rok = paste(min(as.numeric(rok_budowy)), max(as.numeric(rok_budowy)), sep = " - "),
+            ogoloshennya = round(sum(n())/nrow(plot5)*100))
+
+integral_data <- integral_data[,-1]
+integral_data <- integral_data[-1,]
+integral_data <- integral_data[-6,]
+
+
+integral_data2 <- integral_data %>% 
+  mutate(csum = rev(cumsum(rev(ogoloshennya))), 
+         pos = ogoloshennya/2 + lead(csum, 1),
+         pos = if_else(is.na(pos), ogoloshennya/2, pos))
+
+ggplot(integral_data, aes(x = "", y = ogoloshennya, fill = fct_inorder(interval_rok))) +
+  geom_bar(stat = "identity", width = 1,color="white") +
+  coord_polar("y") +
+  scale_fill_brewer(palette = "Pastel1") + 
+  geom_label_repel(data = integral_data2,
+                   aes(y = pos, label = paste0(ogoloshennya, "%")),
+                   size = 4, nudge_x = 0.8, show.legend = FALSE) +
+  labs(title = "Number of listings and cumulative value for construction year intervals",
+       x = NULL, y = NULL) +
+  guides(fill = guide_legend(title = "Construction year interval")) +
+  theme_void()
+```
+
+
+The pie chart shows that the vast majority *(53%)* of announcements and values are for buildings built between *2011-2025*. Older construction periods have a smaller share, with the period *1981-2010* accounting for *23%* and the period *1953-1980 accounting for 19%*. Buildings from *1895-1920* and *1928-1950* have minimal representation.It can be inferred from this that modern buildings that meet high standards of quality, safety and convenience are the most desirable. 
+<br>
+<br>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+ggplot(dane_lublin, aes(x = area, y = price, color = city)) +
+  geom_point(color = "lightgreen") +
+  geom_smooth(method = "lm", se = FALSE, linetype = "dashed", color = "black", size = 0.5) +
+  labs(title = "Correlation between price and house area",
+       subtitle = "Lublin",
+       x = "Area",
+       y = "Price",
+       color = "City") +
+  scale_x_continuous(breaks = seq(min(dane_lublin$area)+2, max(dane_lublin$area), by = 25)) +  
+  scale_y_continuous(breaks = seq(min(dane_lublin$price), max(dane_lublin$price)+150000, by = 50000)) +
+  theme(plot.margin = margin(t = 0, r = 0, b = 0, l = 0)) +
+  coord_cartesian(ylim = c(min(dane_lublin$price), max(dane_lublin$price)+150000))
+```
+
+
+The chart shows that there is a positive correlation between price and area of houses in Lublin, meaning that the larger the house, the more expensive it tends to be. The implication is that demand for large houses is high and supply is low. It is possible that large houses are attractive because of their larger space, better conditions or prestige. Alternatively, small houses may be cheaper, but also less popular or less available.
+<br>
+<br>
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+plot7 <- dane_lublin %>%
+  filter(rodzaj_budowy != "brak informacji" ) %>%
+  group_by(rodzaj_budowy) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = round(count / sum(count) * 100,2),rodzaj_budowy=paste0(rodzaj_budowy,"(",percentage,"%)")) %>%
+  ungroup()
+plot7 <- plot7[-2]
+
+PieChart(rodzaj_budowy, y = percentage, data = plot7,
+          fill = "viridis", values = "off", color = "black",
+          lwd = 2, lty = 1, main = "Relationship between building type and percentage of ads")
+```
+
+
+The chart shows that the majority of ads are for block-type buildings *(78.58%)*, which may imply that these are the most common and affordable housing options. Apartment building type buildings make up the second largest group *(10.26%)*, which may suggest that these are newer and more expensive alternatives. Townhouse-type buildings *(7.83%)* and detached house *(3.24%)* have a much smaller share, which may indicate that these are older and rarer property types. Terraced house type buildings have the smallest share *(0.09%)*, which may indicate that these are very rare and specific offerings.
+<br>
+<br>
+<br>
+<br>
+**Clustering**
+<br>
+In my research, I use cluster analysis to study the real estate market in Lublin city in detail. The data I obtained includes information on prices, number of rooms and area of properties. Using the k-means algorithm, I formed clusters to further analyze the distribution of prices according to the number of rooms. I then determined the optimal number of clusters and examined their effect on the distribution of prices per square meter. The results are presented in the form of graphs that show the distribution of prices by number of rooms and the distribution of clusters by area and price per square meter. This gives us an in-depth understanding of the structure of the real estate market and identifies potential patterns that can be useful to investors and developers.
+<br>
+```{r message=FALSE,warning=FALSE}
+Data_Cluster <- dane_lublin %>% select(price,price_m2,rooms,area)
+clusters_wss <- fviz_nbclust(Data_Cluster,kmeans,method="wss")
+clusters_silhouette <- fviz_nbclust(Data_Cluster,kmeans,method="silhouette")
+```
+
+```{r, fig.align = "center", fig.width = 10, fig.height = 5}
+grid.arrange(clusters_wss, clusters_silhouette, ncol = 2)
+```
+<br>
+The graphs show that the optimal number of *(k)* clusters in a dataset can vary depending on whether we consider the sum of intragroup squares or the average silhouette width.
+<br>
+The sum of squares indicates *k=3*. The plot of the intragroup sum of squares shows a sharp drop to k=3 and then a leveling off, suggesting that *k=3* is the elbow point and optimal number of clusters according to this method.
+<br>
+Silhouette width indicates *k=2* or *k=5*. The graph of average silhouette width shows maxima at *k=2* and *k=5*, suggesting that these values could potentially be the optimal cluster numbers according to this method.
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+optimal_cluster <- kmeans(Data_Cluster,centers=2,iter.max=25)
+fviz_cluster(optimal_cluster,data=Data_Cluster,labelsize=0,geom="points")
+Data_Cluster <- data.frame(Data_Cluster)
+Data_Cluster$Cluster <- optimal_cluster$cluster
+Data_Cluster$Cluster <- as.factor(Data_Cluster$Cluster)
+```
+<br>
+The graph shows two distinct clusters. Each cluster is a group of data points that have similar characteristics, as determined by the clustering algorithm. The blue cluster is more dispersed along Dim1, while the red cluster is compact, but extends along both dimensions.
+<br>
+The clusters have different characteristics. The blue cluster (1) has a larger range of values along Dim1, suggesting that it is a more diverse group. The red cluster (2) has a smaller range of values along Dim1, but a larger range along Dim2, suggesting it is a more homogeneous group.
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+ggplot(Data_Cluster, aes(x = as.factor(rooms), y = price, fill = Cluster)) +
+  geom_boxplot() +
+  labs(title = "Distribution of price depending on the number of rooms and clusters",
+       x = "Number of rooms", y = "Price") +
+  theme_minimal()
+
+```
+<br>
+The graph shows that for each number of rooms, cluster 2 has a higher median and price range than cluster 1, suggesting that cluster 2 is made up of more expensive housing units,and that for room numbers 3 and 4, cluster 1 has more points lying outside the upper moustache, suggesting that cluster 1 has more housing units with a much higher price than typical for that cluster.
+<br>
+<br>
+```{r message=FALSE,warning=FALSE}
+Data_Cluster$Cluster <- ifelse(Data_Cluster$Cluster==1,"High","Low")
+names(Data_Cluster)[names(Data_Cluster)=="Cluster"] <- "Standart"
+Data_Cluster$Standart <- factor(Data_Cluster$Standart)
+Standart_DataFrame <- Data_Cluster %>% 
+  group_by(area,price_m2,Standart) %>% 
+  summarise(Number=n(),groups="drop") %>% 
+  data.frame()
+```
+
+```{r message=FALSE,warning=FALSE}
+ggplot(Standart_DataFrame, aes(x = area, y = price_m2, color = Standart)) +
+  geom_point() +
+  labs(title = "Distribution of High and Low clusters by area and price per square meter",
+       x = "Area", y = "Price per square meter") +
+  theme_minimal()
+```
+<br>
+The chart shows that properties labeled "Low" have a lower price per meter and a smaller area than properties labeled "High."
+<br>
+<br>
+<h3><strong>Results</strong></h3>
+The result of the project was a detailed understanding of the structure of the real estate market in Lublin, as well as a comparative analysis with other cities, which will provide insight into the characteristics and trends of this segment. The data obtained can be useful to potential investors, developers and other real estate market participants in Lublin.
+
+
+
+
+
+
+
+
